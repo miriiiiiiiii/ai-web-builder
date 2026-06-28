@@ -1,4 +1,4 @@
-package com.miri.aibuilderbackend.exception;
+package com.miri.aibuilder.exception;
 
 import lombok.Getter;
 

@@ -1,7 +1,7 @@
-package com.miri.aibuilderbackend.controller;
+package com.miri.aibuilder.controller;
 
-import com.miri.aibuilderbackend.common.BaseResponse;
-import com.miri.aibuilderbackend.common.ResultUtils;
+import com.miri.aibuilder.common.BaseResponse;
+import com.miri.aibuilder.common.ResultUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;

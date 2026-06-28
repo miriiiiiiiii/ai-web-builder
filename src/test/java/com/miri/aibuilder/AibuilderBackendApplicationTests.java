@@ -1,4 +1,4 @@
-package com.miri.aibuilderbackend;
+package com.miri.aibuilder;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

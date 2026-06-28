@@ -1,4 +1,4 @@
-package com.miri.aibuilderbackend.common;
+package com.miri.aibuilder.common;
 
 import lombok.Data;
 

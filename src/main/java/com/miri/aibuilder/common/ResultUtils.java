@@ -1,6 +1,6 @@
-package com.miri.aibuilderbackend.common;
+package com.miri.aibuilder.common;
 
-import com.miri.aibuilderbackend.exception.ErrorCode;
+import com.miri.aibuilder.exception.ErrorCode;
 
 /**
  * 响应工具类

@@ -1,7 +1,7 @@
-package com.miri.aibuilderbackend.exception;
+package com.miri.aibuilder.exception;
 
-import com.miri.aibuilderbackend.common.BaseResponse;
-import com.miri.aibuilderbackend.common.ResultUtils;
+import com.miri.aibuilder.common.BaseResponse;
+import com.miri.aibuilder.common.ResultUtils;
 import io.swagger.v3.oas.annotations.Hidden;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;

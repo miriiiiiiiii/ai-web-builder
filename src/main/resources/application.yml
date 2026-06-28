@@ -1,6 +1,32 @@
 spring:
   application:
     name: ai-builder-backend
+  # mysql
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ai_builder
+    username: root
+    password: 1234
+  # 邮件配置
+  mail:
+    username: 1791863590@qq.com
+    password: xjtbzglujdofegfc
+    host: smtp.qq.com
+    port: 465
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          socketFactory:
+            port: 465
+            class: javax.net.ssl.SSLSocketFactory
+            fallback: false
+    valid: 5
+    title: "AI Builder - 用户认证"
+    template: "您的动态验证码为：<strong style='color: red'>%s</strong>，%d分钟内有效，若非本人操作，请勿泄露。"
 server:
   port: 8123
   servlet:
@@ -9,7 +35,7 @@ server:
 springdoc:
   group-configs:
     - group: 'default'
-      packages-to-scan: com.miri.aibuilderbackend.controller
+      packages-to-scan: com.miri.aibuilder.controller
 # knife4j
 knife4j:
   enable: true
