@@ -31,28 +31,28 @@ public class AuthInterceptor {
      */
     @Around("@annotation(authCheck)")
     public Object doInterceptor(ProceedingJoinPoint joinPoint, AuthCheck authCheck) throws Throwable {
+        // 1.获取要访问的方法所需的权限
         String mustRole = authCheck.mustRole();
-        RequestAttributes requestAttributes = RequestContextHolder.currentRequestAttributes();
-        HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
-        // 1.获取当前登录用户
-        User loginUser = userService.getLoginUser(request);
-        UserRoleEnum mustRoleEnum = UserRoleEnum.getEnumByValue(mustRole);
-        // 2.不需要权限，放行
-        if (mustRoleEnum == null) {
+        UserRoleEnum  roleEnum = UserRoleEnum.getEnumByValue(mustRole);
+        // 2.方法不需要权限，直接放行
+        if (roleEnum == null) {
             return joinPoint.proceed();
         }
         // 3.必须有该权限才通过
         // 获取当前用户具有的权限
-        UserRoleEnum userRoleEnum = UserRoleEnum.getEnumByValue(loginUser.getUserRole());
+        RequestAttributes requestAttributes = RequestContextHolder.currentRequestAttributes();
+        HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
+        User loginUser = userService.getLoginUser(request);
+        UserRoleEnum useRoleEnum = UserRoleEnum.getEnumByValue(loginUser.getUserRole());
         // 没有权限，拒绝
-        if (userRoleEnum == null) {
+        if (useRoleEnum == null) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
-        // 要求必须有管理员权限，但用户没有管理员权限，拒绝
-        if (UserRoleEnum.ADMIN.equals(mustRoleEnum) && !UserRoleEnum.ADMIN.equals(userRoleEnum)) {
+        // 方法要求管理员权限，而用户没有管理员权限
+        if (UserRoleEnum.ADMIN.equals(roleEnum) && !UserRoleEnum.ADMIN.equals(useRoleEnum)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
-        // 通过权限校验，放行
+        // 4.通过权限校验，放行
         return joinPoint.proceed();
     }
 }

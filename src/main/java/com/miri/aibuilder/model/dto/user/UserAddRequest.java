@@ -1,17 +1,11 @@
-package com.miri.aibuilder.model.vo;
+package com.miri.aibuilder.model.dto.user;
 
 import lombok.Data;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 
 @Data
-public class LoginUserVO implements Serializable {
-
-    /**
-     * 用户 id
-     */
-    private Long id;
+public class UserAddRequest implements Serializable {
 
     /**
      * 账号
@@ -44,19 +38,9 @@ public class LoginUserVO implements Serializable {
     private Integer gender;
 
     /**
-     * 用户角色：user/admin
+     * 用户角色: user, admin
      */
     private String userRole;
-
-    /**
-     * 创建时间
-     */
-    private LocalDateTime createTime;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updateTime;
 
     private static final long serialVersionUID = 1L;
 }

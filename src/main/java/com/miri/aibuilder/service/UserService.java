@@ -1,9 +1,15 @@
 package com.miri.aibuilder.service;
 
+import com.miri.aibuilder.model.dto.user.UserAddRequest;
+import com.miri.aibuilder.model.dto.user.UserQueryRequest;
 import com.miri.aibuilder.model.vo.LoginUserVO;
+import com.miri.aibuilder.model.vo.UserVO;
+import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import com.miri.aibuilder.model.entity.User;
 import jakarta.servlet.http.HttpServletRequest;
+
+import java.util.List;
 
 /**
  * 用户 服务层。
@@ -70,4 +76,29 @@ public interface UserService extends IService<User> {
      * @return
      */
     User getLoginUser(HttpServletRequest request);
+
+    /**
+     * 获取脱敏后的用户信息
+     * @param user
+     * @return
+     */
+    UserVO getUserVO(User user);
+
+    /**
+     * 获取脱敏后的用户列表
+     * @param userList
+     * @return
+     */
+    List<UserVO> getUserVOList(List<User> userList);
+
+    /**
+     * 获取用户查询条件
+     * @param userQueryRequest
+     * @return
+     */
+    QueryWrapper getQueryWrapper(UserQueryRequest userQueryRequest);
+
+    // region 管理员增删改查用户接口
+    Long addUser(UserAddRequest userAddRequest);
+    // endregion
 }

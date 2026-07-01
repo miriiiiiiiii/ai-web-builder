@@ -1,27 +1,31 @@
 package com.miri.aibuilder.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.CollUtil;
 import com.miri.aibuilder.config.EmailClient;
-import com.miri.aibuilder.constant.UserConstant;
+
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.mapper.UserMapper;
+import com.miri.aibuilder.model.dto.user.UserAddRequest;
+import com.miri.aibuilder.model.dto.user.UserQueryRequest;
 import com.miri.aibuilder.model.entity.User;
 import com.miri.aibuilder.model.enums.UserRoleEnum;
 import com.miri.aibuilder.model.vo.LoginUserVO;
+import com.miri.aibuilder.model.vo.UserVO;
 import com.miri.aibuilder.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static com.miri.aibuilder.constant.UserConstant.USER_LOGIN_STATE;
 
@@ -55,7 +59,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (!userAccount.matches("^(?=.*[A-Za-z])[A-Za-z\\d]{4,16}$")) {
             throw new BusinessException(
                     ErrorCode.PARAMS_ERROR,
-                    "账号需为 4-16 位字母和数字，且不能全为数字"
+                    "账号需为 4-16 位纯字母/字母数字的组合，且不能全为数字"
             );
         }
         if (!userEmail.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
@@ -205,12 +209,75 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (currentUser == null || currentUser.getId() == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
-        // 2.从数据库查询（
-        long userId = currentUser.getId();
-        currentUser = this.getById(userId);
+        // 2.查询用户是否存在
+        currentUser = this.getById(currentUser.getId());
         if (currentUser == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
         return currentUser;
     }
+
+    @Override
+    public UserVO getUserVO(User user) {
+        if (user == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
+        }
+        UserVO userVO = new UserVO();
+        BeanUtil.copyProperties(user, userVO);
+        return userVO;
+    }
+
+    @Override
+    public List<UserVO> getUserVOList(List<User> userList) {
+        if (CollUtil.isEmpty(userList)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
+        }
+        return userList.stream()
+                .map(this::getUserVO)
+                .collect(Collectors.toList());
+
+    }
+
+    @Override
+    public QueryWrapper getQueryWrapper(UserQueryRequest userQueryRequest) {
+        if (userQueryRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "查询参数为空");
+        }
+        // 查询参数
+        String keyword = userQueryRequest.getKeyword();
+        // 排序方式和字段
+        String sortField = userQueryRequest.getSortField();
+        String sortOrder = userQueryRequest.getSortOrder();
+        QueryWrapper queryWrapper = QueryWrapper.create();
+        // 拼接查询条件
+        if (StringUtils.isNotBlank(keyword)) {
+            String likeKey = "%" + keyword + "%";
+            queryWrapper.where("(userAccount LIKE ? OR nickName LIKE ?)", likeKey, likeKey);
+        }
+
+        if (StringUtils.isNotBlank(sortField)) {
+            queryWrapper.orderBy(sortField, "asc".equals(sortOrder));
+        }
+        return queryWrapper;
+    }
+
+    // region 管理员增删改查用户接口
+    @Override
+    public Long addUser(UserAddRequest userAddRequest) {
+        if (userAddRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
+        }
+        User user = new User();
+        BeanUtil.copyProperties(userAddRequest, user);
+        // 设置默认密码
+        final String DEFAULT_PWD = "12345678";
+        String encryptPassword = this.getEncryptPassword(DEFAULT_PWD);
+        user.setUserPassword(encryptPassword);
+        boolean result = this.save(user);
+        if (!result) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "添加用户失败");
+        }
+        return user.getId();
+    }
+    // endregion
 }
