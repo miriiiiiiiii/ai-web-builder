@@ -1,16 +1,18 @@
 spring:
   application:
     name: ai-builder-backend
+  profiles:
+    active: local
   # mysql
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ai_builder
-    username: root
-    password: 1234
+    username: your username
+    password: your password
   # 邮件配置
   mail:
-    username: 1791863590@qq.com
-    password: xjtbzglujdofegfc
+    username: your email
+    password: your password
     host: smtp.qq.com
     port: 465
     properties:
@@ -41,4 +43,13 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+# AI
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: https://api.deepseek.com
+      api-key: <Your API Key>
+      model-name: deepseek-v4-flash
+      log-requests: true
+      log-responses: true
 
