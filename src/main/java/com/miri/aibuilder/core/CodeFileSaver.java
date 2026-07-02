@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * 代码文件保存器
  */
+@Deprecated
 public class CodeFileSaver {
     // 文件保存的根目录
     public static final String ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_output";
