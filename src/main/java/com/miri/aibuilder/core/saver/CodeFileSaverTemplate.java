@@ -63,7 +63,7 @@ public abstract class CodeFileSaverTemplate<T> {
      * @return
      */
     protected final void writeToFile(String dirPath, String fileName, String content) {
-        if (StrUtil.isBlank(content)) {
+        if (StrUtil.isNotBlank(content)) {
             String fullPath = dirPath + File.separator + fileName;
             FileUtil.writeString(content, fullPath, StandardCharsets.UTF_8);
         }
