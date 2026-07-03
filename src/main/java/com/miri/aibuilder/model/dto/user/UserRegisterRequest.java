@@ -1,4 +1,4 @@
-package com.miri.aibuilder.model.dto;
+package com.miri.aibuilder.model.dto.user;
 
 import lombok.Data;
 
