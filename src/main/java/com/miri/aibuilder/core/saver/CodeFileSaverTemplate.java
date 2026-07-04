@@ -3,6 +3,7 @@ package com.miri.aibuilder.core.saver;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import com.miri.aibuilder.constant.AppConstant;
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.model.enums.CodeGenTypeEnum;
@@ -15,18 +16,19 @@ import java.nio.charset.StandardCharsets;
  */
 public abstract class CodeFileSaverTemplate<T> {
     // 文件保存的根目录
-    protected static final String ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_output";
+    protected static final String ROOT_DIR = AppConstant.CODE_OUTPUT_ROOT_DIR;
 
     /**
      * 模版方法：保存代码的标准流程
      * @param result
-     * @return
+     * @param appId 应用ID
+     * @return 目录文件对象
      */
-    public final File saveCode(T result) {
+    public final File saveCode(T result, Long appId) {
         // 1.校验入参
         validateInput(result);
         // 2.构建文件保存路径
-        String dirPath = buildDirPath();
+        String dirPath = buildDirPath(appId);
         // 3.保存文件（具体实现交给子类）
         saveFiles(result, dirPath);
         // 4.返回文件对象
@@ -44,12 +46,16 @@ public abstract class CodeFileSaverTemplate<T> {
     }
 
     /**
-     * 构建文件保存路径 Root_DIR/bizType_雪花ID
+     * 构建文件保存路径 Root_DIR/bizType_应用ID
+     * @param appId 应用ID
      * @return
      */
-    protected final String buildDirPath() {
+    protected final String buildDirPath(Long appId) {
+        if (appId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "应用ID为空");
+        }
         String bizType = getCodeGenType().getValue();
-        String uniqueDirName = StrUtil.format("{}_{}", bizType, IdUtil.getSnowflakeNextIdStr());
+        String uniqueDirName = StrUtil.format("{}_{}", bizType, appId);
         String dirPath = ROOT_DIR + File.separator + uniqueDirName;
         FileUtil.mkdir(dirPath);
         return dirPath;

@@ -3,6 +3,7 @@ package com.miri.aibuilder.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.miri.aibuilder.annotation.AuthCheck;
 import com.miri.aibuilder.common.BaseResponse;
 import com.miri.aibuilder.common.DeleteRequest;
@@ -12,10 +13,7 @@ import com.miri.aibuilder.constant.UserConstant;
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.exception.ThrowUtils;
-import com.miri.aibuilder.model.dto.app.AppAddRequest;
-import com.miri.aibuilder.model.dto.app.AppAdminUpdateRequest;
-import com.miri.aibuilder.model.dto.app.AppQueryRequest;
-import com.miri.aibuilder.model.dto.app.AppUpdateRequest;
+import com.miri.aibuilder.model.dto.app.*;
 import com.miri.aibuilder.model.entity.App;
 import com.miri.aibuilder.model.entity.User;
 import com.miri.aibuilder.model.enums.CodeGenTypeEnum;
@@ -27,10 +25,15 @@ import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 应用 控制层。
@@ -46,6 +49,58 @@ public class AppController {
 
     @Resource
     private UserService userService;
+
+    /**
+     * 对话生成代码
+     * @param userMessage 用户消息
+     * @param appId 应用ID
+     * @param request 请求
+     * @return
+     */
+    @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam String userMessage, @RequestParam Long appId, HttpServletRequest request) {
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
+        // 调用服务生成代码（流式SSE）
+        Flux<String> contentFlux = appService.chatToGenCode(userMessage, appId, loginUser);
+        // 封装流式响应结果，以解决空格丢失问题
+        return contentFlux
+                .map(chunk -> {
+                    // 将内容包装成 json 对象
+                    Map<String, String> wrapper = Map.of("d", chunk);
+                    String jsonData = JSONUtil.toJsonStr(wrapper);
+                    // 进一步包装成 ServerSentEvent 对象
+                    return ServerSentEvent.<String>builder()
+                            .data(jsonData)
+                            .build();
+                 })
+                .concatWith(Mono.just(
+                    // 发送结束事件
+                    ServerSentEvent.<String>builder()
+                            .event("done")
+                            .data("")
+                            .build()
+                ));
+    }
+
+    /**
+     * 部署应用
+     * @param appDeployRequest 部署请求
+     * @param request 请求
+     * @return
+     */
+    @PostMapping("/deploy")
+    public BaseResponse<String> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
+        // 参数校验
+        ThrowUtils.throwIf(appDeployRequest == null, ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
+        // 调用服务部署应用
+        String deployUrl = appService.deployApp(appDeployRequest.getAppId(), loginUser);
+        return ResultUtils.success(deployUrl);
+    }
+
     /**
      * 创建应用
      *
@@ -55,8 +110,8 @@ public class AppController {
      */
     @PostMapping("/add")
     public BaseResponse<Long> addApp(@RequestBody AppAddRequest appAddRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
         // 参数校验
+        ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
         String initPrompt = appAddRequest.getInitPrompt();
         ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
         // 获取当前登录用户
