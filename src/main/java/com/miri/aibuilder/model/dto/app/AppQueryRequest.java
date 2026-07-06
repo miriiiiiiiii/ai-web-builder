@@ -50,5 +50,10 @@ public class AppQueryRequest extends PageRequest implements Serializable {
      */
     private Long userId;
 
+    /**
+     * 用户名
+     */
+    private String userName;
+
     private static final long serialVersionUID = 1L;
 }

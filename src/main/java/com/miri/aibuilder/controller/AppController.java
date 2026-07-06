@@ -32,6 +32,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -120,8 +121,11 @@ public class AppController {
         App app = new App();
         BeanUtil.copyProperties(appAddRequest, app);
         app.setUserId(loginUser.getId());
-        // 应用名称暂时为 initPrompt 前 12 位
-        app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
+
+        // 智能提取应用名称
+        String autoAppName = extractAppNameFromPrompt(initPrompt);
+        app.setAppName(autoAppName);
+
         // 暂时设置为多文件生成
         app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
         // 插入数据库
@@ -129,7 +133,45 @@ public class AppController {
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         return ResultUtils.success(app.getId());
     }
+    /**
+     * 从提示词自动提取应用名称
+     * @param prompt 用户输入提示词
+     * @return 提取后的应用名，提取失败则截取前12字符兜底
+     */
+    private String extractAppNameFromPrompt(String prompt) {
+        // 1. 清除前后空格
+        String text = prompt.trim();
+        // 定义前缀指令（需要剔除的开头文字）
+        List<String> prefixList = Arrays.asList("生成一个", "做一个", "写一个", "搭建", "开发", "创建", "制作");
+        // 定义后缀标识（名称结束的关键字）
+        List<String> suffixList = Arrays.asList("网站", "商城", "后台", "页面", "社区", "小游戏", "管理系统");
 
+        // 剔除开头前缀
+        for (String prefix : prefixList) {
+            if (text.startsWith(prefix)) {
+                text = text.substring(prefix.length()).trim();
+                break;
+            }
+        }
+
+        // 截取到第一个后缀关键词为止
+        int endIndex = text.length();
+        for (String suffix : suffixList) {
+            if (text.contains(suffix)) {
+                endIndex = text.indexOf(suffix) + suffix.length();
+                break;
+            }
+        }
+        String targetName = text.substring(0, endIndex).trim();
+
+        // 兜底：提取失败则截取原prompt前12位
+        if (StrUtil.isBlank(targetName)) {
+            return prompt.substring(0, Math.min(prompt.length(), 12));
+        }
+        // 限制名称长度，防止过长
+        int maxNameLen = 12;
+        return targetName.length() > maxNameLen ? targetName.substring(0, maxNameLen) : targetName;
+    }
     /**
      * 更新应用（用户只能更新自己的应用名称）
      *

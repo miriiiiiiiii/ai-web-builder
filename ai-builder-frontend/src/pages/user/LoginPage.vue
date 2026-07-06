@@ -148,14 +148,14 @@ const emailForm = reactive<API.EmailLoginRequest>({
 })
 
 const accountRules: Record<string, Rule[]> = {
-  userAccount: [{ required: true, message: '请输入账号', trigger: 'blur' }],
-  userPassword: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  userAccount: [{ required: true, message: '账号是必填项！', trigger: 'blur' }],
+  userPassword: [{ required: true, message: '密码是必填项！', trigger: 'blur' }],
 }
 
 const emailRules: Record<string, Rule[]> = {
   userEmail: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' },
+    { required: true, message: '邮箱是必填项！', trigger: 'blur' },
+    { type: 'email', message: '邮箱格式不正确！', trigger: 'blur' },
   ],
   code: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
 }

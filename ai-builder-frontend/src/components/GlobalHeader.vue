@@ -81,7 +81,12 @@ const originItems = [
     key: '/admin/userManage',
     label: '用户管理',
     title: '用户管理',
-  }
+  },
+  {
+    key: '/admin/appManage',
+    label: '应用管理',
+    title: '应用管理',
+  },
 ]
 
 // 过滤菜单项
@@ -116,9 +121,7 @@ const handleMenuClick: MenuProps['onClick'] = (e) => {
 const doLogout = async () => {
   const res = await userLogout()
   if (res.data.code === 0) {
-    loginUserStore.setLoginUser({
-      userName: '未登录',
-    })
+    loginUserStore.setLoginUser({})
     message.success('退出登录成功')
     await router.push('/user/login')
   } else {

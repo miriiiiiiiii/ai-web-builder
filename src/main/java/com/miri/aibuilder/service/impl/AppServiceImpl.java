@@ -127,17 +127,38 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if (appQueryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
         }
+
         Long id = appQueryRequest.getId();
+        Long userId = appQueryRequest.getUserId();
+        // 如果传了用户名，则先查用户
+        String userName = appQueryRequest.getUserName();
+        List<Long> userIds = null;
+        if (StrUtil.isNotBlank(userName)) {
+
+            List<User> userList = userService.list(
+                    QueryWrapper.create().like("nickName", userName)
+            );
+
+            if (CollUtil.isEmpty(userList)) {
+                return QueryWrapper.create().eq("id", -1);
+            }
+
+            userIds = userList.stream()
+                    .map(User::getId)
+                    .collect(Collectors.toList());
+        }
+
         String appName = appQueryRequest.getAppName();
         String cover = appQueryRequest.getCover();
         String initPrompt = appQueryRequest.getInitPrompt();
         String codeGenType = appQueryRequest.getCodeGenType();
         String deployKey = appQueryRequest.getDeployKey();
         Integer priority = appQueryRequest.getPriority();
-        Long userId = appQueryRequest.getUserId();
         String sortField = appQueryRequest.getSortField();
         String sortOrder = appQueryRequest.getSortOrder();
-        return QueryWrapper.create()
+
+
+        QueryWrapper wrapper = QueryWrapper.create()
                 .eq("id", id)
                 .like("appName", appName)
                 .like("cover", cover)
@@ -145,8 +166,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .eq("codeGenType", codeGenType)
                 .eq("deployKey", deployKey)
                 .eq("priority", priority)
-                .eq("userId", userId)
                 .orderBy(sortField, "ascend".equals(sortOrder));
+
+        if (CollUtil.isNotEmpty(userIds)) {
+            wrapper.in("userId", userIds);
+        } else {
+            wrapper.eq("userId", userId);
+        }
+        return wrapper;
     }
 
     @Override

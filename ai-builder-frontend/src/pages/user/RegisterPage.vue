@@ -115,7 +115,7 @@ const formState = reactive<API.UserRegisterRequest>({
 
 const validateCheckPassword = async (_rule: Rule, value: string) => {
   if (!value) {
-    return Promise.reject('请确认密码')
+    return Promise.reject('请确认密码！')
   }
   if (value !== formState.userPassword) {
     return Promise.reject('两次输入的密码不一致')
@@ -124,13 +124,28 @@ const validateCheckPassword = async (_rule: Rule, value: string) => {
 }
 
 const rules: Record<string, Rule[]> = {
-  nickName: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
-  userAccount: [{ required: true, message: '请输入账号', trigger: 'blur' }],
-  userEmail: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' },
+  nickName: [
+    { required: true, message: '昵称是必填项！' },
+    { min: 4, max: 20, message: '昵称长度需为 4-20 个字符' },
   ],
-  userPassword: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  userAccount: [
+    { required: true, message: '账号是必填项！' },
+    {
+      pattern: /^(?=.*[A-Za-z])[A-Za-z\d]{4,16}$/,
+      message: '账号需为 4-16 位纯字母/字母数字的组合，且不能全为数字',
+    },
+  ],
+  userEmail: [
+    { required: true, message: '邮箱是必填项！', trigger: 'blur' },
+    { type: 'email', message: '邮箱格式不正确！', trigger: 'blur' },
+  ],
+  userPassword: [
+    { required: true, message: '密码是必填项！' },
+    {
+      pattern: /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,20}$/,
+      message: '密码需为 8-20 位，且至少包含字母和数字',
+    },
+  ],
   checkPassword: [{ validator: validateCheckPassword, trigger: 'blur' }],
 }
 
