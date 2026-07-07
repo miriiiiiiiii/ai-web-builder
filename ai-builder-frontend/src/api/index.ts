@@ -5,10 +5,8 @@
 import * as userController from './userController'
 import * as appController from './appController'
 import * as staticResourceController from './staticResourceController'
-import * as helloController from './helloController'
 export default {
   userController,
   appController,
   staticResourceController,
-  helloController,
 }

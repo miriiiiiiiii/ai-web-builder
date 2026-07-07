@@ -14,18 +14,23 @@ import com.miri.aibuilder.mapper.AppMapper;
 import com.miri.aibuilder.model.dto.app.AppQueryRequest;
 import com.miri.aibuilder.model.entity.App;
 import com.miri.aibuilder.model.entity.User;
+import com.miri.aibuilder.model.enums.ChatHistoryMessageTypeEnum;
 import com.miri.aibuilder.model.enums.CodeGenTypeEnum;
 import com.miri.aibuilder.model.vo.AppVO;
 import com.miri.aibuilder.model.vo.UserVO;
 import com.miri.aibuilder.service.AppService;
+import com.miri.aibuilder.service.ChatHistoryService;
 import com.miri.aibuilder.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
+import com.mybatisflex.core.util.SqlUtil;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +43,7 @@ import java.util.stream.Collectors;
  *
  * @author <a href="https://github.com/miriiiiiiiii">程序员小马</a>
  */
+@Slf4j
 @Service
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
     @Resource
@@ -45,6 +51,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private AiCodeGeneratorFacade aiCodeGeneratorFacade;
+
+    @Resource
+    private ChatHistoryService chatHistoryService;
 
     @Override
     public Flux<String> chatToGenCode(String userMessage, Long appId, User loginUser) {
@@ -61,8 +70,30 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 4.获取应用的代码生成类型
         String codeGenTypeStr = app.getCodeGenType();
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
-        // 5.调用接口生成并保存代码，返回流式响应结果
-        return  aiCodeGeneratorFacade.generateAndSaveCodeStream(userMessage, codeGenTypeEnum, appId);
+        // 5.调用ai前，保存用户消息到对话历史
+        chatHistoryService.addChatHistory(appId, userMessage, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
+        // 6.调用接口生成并保存代码
+        Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(userMessage, codeGenTypeEnum, appId);
+        // 7.拼接ai的响应内容，完成后保存到对话历史
+        StringBuilder stringBuilder = new StringBuilder();
+        return contentFlux
+                .map(chunk -> {
+                    // 拼接 chunk
+                    stringBuilder.append(chunk);
+                    return chunk;
+                })
+                .doOnComplete(() -> {
+                    // 流式响应完成后，保存AI回复到对话历史
+                    String aiResponse = stringBuilder.toString();
+                    if (StrUtil.isNotBlank(aiResponse)) {
+                        chatHistoryService.addChatHistory(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
+                    }
+                })
+                .doOnError(error -> {
+                    // AI回复失败，也保存错误信息到对话历史
+                    String errorMessage = error.getMessage();
+                    chatHistoryService.addChatHistory(appId, errorMessage, ChatHistoryMessageTypeEnum.AI.getValue(), null);
+                });
     }
 
     @Override
@@ -195,7 +226,24 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }).collect(Collectors.toList());
     }
 
-
+    @Override
+    public boolean removeById(Serializable id) {
+        if (id == null) {
+            return false;
+        }
+        long appId = Long.valueOf(id.toString());
+        if (appId <= 0) {
+            return false;
+        }
+        // 先删除关联的对话历史
+        try {
+            chatHistoryService.removeById(id);
+        } catch (Exception e) {
+            log.error("删除应用关联的对话历史失败：{}", e.getMessage());
+        }
+        // 再删除应用
+        return super.removeById(appId);
+    }
 
 
 }

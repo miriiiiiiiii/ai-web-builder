@@ -8,6 +8,7 @@ import com.miri.aibuilder.core.saver.CodeFileSaverExecutor;
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.model.enums.CodeGenTypeEnum;
+import com.miri.aibuilder.service.ChatHistoryService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
