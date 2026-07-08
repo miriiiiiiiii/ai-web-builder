@@ -3,6 +3,18 @@ spring:
     name: ai-builder-backend
   profiles:
     active: local
+  # session 配置
+  session:
+    store-type: redis
+    # session 30 天过期
+    timeout: 2592000
+  # redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      ttl: 3600
   # mysql
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -29,10 +41,15 @@ spring:
     valid: 5
     title: "AI Builder - 用户认证"
     template: "您的动态验证码为：<strong style='color: red'>%s</strong>，%d分钟内有效，若非本人操作，请勿泄露。"
-server:
-  port: 8123
-  servlet:
-    context-path: /api
+  server:
+    port: 8123
+    servlet:
+      context-path: /api
+      # cookie 30 天过期
+      session:
+        cookie:
+          max-age: 2592000
+
 # springdoc-openapi
 springdoc:
   group-configs:

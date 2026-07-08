@@ -1,15 +1,25 @@
 package com.miri.aibuilder.ai;
 
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.miri.aibuilder.service.ChatHistoryService;
+import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.time.Duration;
 
 /**
  * AI服务创建工厂
  */
+@Slf4j
 @Configuration
 public class AiCodeGeneratorServiceFactory {
     @Resource
@@ -18,14 +28,62 @@ public class AiCodeGeneratorServiceFactory {
     @Resource
     private StreamingChatModel streamingChatModel;
 
+    @Resource
+    private RedisChatMemoryStore redisChatMemoryStore;
+
+    @Resource
+    private ChatHistoryService chatHistoryService;
+
+    /**
+     * 缓存 AiCodeGeneratorService 实例
+     * 缓存策略：最大缓存 1000 个实例，写入后 30 分钟过期，访问后 10 分钟过期
+     */
+    private final Cache<Long, AiCodeGeneratorService> serviceCache = Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(Duration.ofMinutes(30))
+            .expireAfterAccess(Duration.ofMinutes(10))
+            .removalListener((key, value, cause) -> {
+                log.debug("AI 服务实例被移除，appId: {}, 原因：{}", key, cause);
+            })
+            .build();
+
+    /**
+     * 创建新的AI服务实例
+     * @param appId
+     * @return
+     */
+    private AiCodeGeneratorService createAiCodeGeneratorService(long appId) {
+        log.info("为appId：{} 创建新的AI服务实例", appId);
+        // 根据 appId 创建独立的对话记忆
+        MessageWindowChatMemory chatMemory = MessageWindowChatMemory.builder()
+                .id(appId)
+                .chatMemoryStore(redisChatMemoryStore)
+                .maxMessages(20)
+                .build();
+        // 从数据库加载对话历史到记忆中
+        chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
+        return AiServices.builder(AiCodeGeneratorService.class)
+                .chatModel(chatModel)
+                .streamingChatModel(streamingChatModel)
+                .chatMemory(chatMemory)
+                .build();
+    }
+
+    /**
+     * 根据 appId 获取服务
+     * @param appId
+     * @return
+     */
+    public AiCodeGeneratorService getAiCodeGeneratorService(long appId) {
+        // 有缓存直接取，没缓存则创建新的实例
+       return serviceCache.get(appId, this::createAiCodeGeneratorService);
+    }
+
     /**
      * 创建Ai代码生成服务
      */
     @Bean
     public AiCodeGeneratorService aiCodeGeneratorService() {
-        return AiServices.builder(AiCodeGeneratorService.class)
-                .chatModel(chatModel)
-                .streamingChatModel(streamingChatModel)
-                .build();
+      return getAiCodeGeneratorService(0);
     }
 }

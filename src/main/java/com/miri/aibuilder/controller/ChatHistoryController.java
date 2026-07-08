@@ -45,7 +45,7 @@ public class ChatHistoryController {
      * @return
      */
     @GetMapping("/app/{appId}")
-    public BaseResponse<Page<ChatHistory>> listChatHistoryByAppId(@PathVariable Long appId,
+    public BaseResponse<Page<ChatHistory>> listAppChatHistory(@PathVariable Long appId,
                                                                   @RequestParam(defaultValue = "10") int pageSize,
                                                                   @RequestParam(required = false)LocalDateTime  lastCreateTime,
                                                                   HttpServletRequest request) {

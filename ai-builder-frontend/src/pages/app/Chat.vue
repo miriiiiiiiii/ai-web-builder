@@ -1,40 +1,25 @@
 <template>
   <div id="appChatPage">
-    <a-card class="header-card" style="margin-bottom: 16px;">
-      <div class="header-bar">
-        <div class="header-left">
-          <img :src="logoUrl" alt="logo" class="header-logo" @click="goHome" />
-          <h1 class="app-name">{{ appInfo?.appName || '网站生成器' }}</h1>
-        </div>
-
-        <div class="header-right">
-          <!-- 只有应用所有者或管理员可查看应用详情 -->
-          <a-button
-            v-if="isOwner || isAdmin"
-            type="default"
-            @click="showAppDetail"
-          >
-            <template #icon>
-              <InfoCircleOutlined />
-            </template>
-            应用详情
-          </a-button>
-          <!-- 只有应用所有者或管理员可部署 -->
-          <a-button
-            v-if="isOwner || isAdmin"
-            type="primary"
-            @click="deployApp"
-            :loading="deploying"
-          >
-            <template #icon>
-              <CloudUploadOutlined />
-            </template>
-            部署
-          </a-button>
-        </div>
-
+    <!-- 顶部栏 -->
+    <div class="header-bar">
+      <div class="header-left">
+        <h1 class="app-name">{{ appInfo?.appName || '网站生成器' }}</h1>
       </div>
-    </a-card>
+      <div class="header-right">
+        <a-button type="default" @click="showAppDetail">
+          <template #icon>
+            <InfoCircleOutlined />
+          </template>
+          应用详情
+        </a-button>
+        <a-button type="primary" @click="deployApp" :loading="deploying">
+          <template #icon>
+            <CloudUploadOutlined />
+          </template>
+          部署按钮
+        </a-button>
+      </div>
+    </div>
 
     <!-- 主要内容区域 -->
     <div class="main-content">
@@ -142,10 +127,9 @@
 
     <!-- 应用详情弹窗 -->
     <AppDetailModal
-      v-if="isOwner || isAdmin"
       v-model:open="appDetailVisible"
       :app="appInfo"
-      :show-actions="true"
+      :show-actions="isOwner || isAdmin"
       @edit="editApp"
       @delete="deleteApp"
     />
@@ -173,7 +157,6 @@ import { listAppChatHistory } from '@/api/chatHistoryController'
 import { CodeGenTypeEnum } from '@/utils/codeGenTypes'
 import request from '@/request'
 
-import logoUrl from '@/assets/logo.png'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import DeploySuccessModal from '@/components/DeploySuccessModal.vue'
@@ -193,7 +176,7 @@ const loginUserStore = useLoginUserStore()
 
 // 应用信息
 const appInfo = ref<API.AppVO>()
-const appId = ref<string>()
+const appId = ref<any>()
 
 // 对话相关
 interface Message {
@@ -238,11 +221,6 @@ const appDetailVisible = ref(false)
 // 显示应用详情
 const showAppDetail = () => {
   appDetailVisible.value = true
-}
-
-// 返回首页
-const goHome = () => {
-  router.push('/')
 }
 
 // 加载对话历史
@@ -409,7 +387,7 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
     // 构建URL参数
     const params = new URLSearchParams({
       appId: appId.value || '',
-      userMessage: userMessage,
+      message: userMessage,
     })
 
     const url = `${baseURL}/app/chat/gen/code?${params}`
@@ -600,22 +578,12 @@ onUnmounted(() => {
   background: #fdfdfd;
 }
 
-/* 顶部卡片容器样式 */
-.header-card :deep(.ant-card-body) {
-  padding: 12px 16px;
-}
-
-/* 顶部栏内部布局 */
+/* 顶部栏 */
 .header-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.header-logo {
-  width: 32px;
-  height: 32px;
-  cursor: pointer;
+  padding: 12px 16px;
 }
 
 .header-left {
@@ -709,6 +677,13 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   color: #666;
+}
+
+/* 加载更多按钮 */
+.load-more-container {
+  text-align: center;
+  padding: 8px 0;
+  margin-bottom: 16px;
 }
 
 /* 输入区域 */
@@ -814,9 +789,10 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
-  .header-card :deep(.ant-card-body) {
-    padding: 12px;
+  .header-bar {
+    padding: 12px 16px;
   }
+
   .app-name {
     font-size: 16px;
   }

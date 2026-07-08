@@ -1,5 +1,6 @@
 package com.miri.aibuilder.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.exception.ThrowUtils;
@@ -13,11 +14,16 @@ import com.miri.aibuilder.service.ChatHistoryService;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 
 /**
@@ -25,6 +31,7 @@ import java.time.LocalDateTime;
  *
  * @author <a href="https://github.com/miriiiiiiiii">程序员小马</a>
  */
+@Slf4j
 @Service
 public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatHistory> implements ChatHistoryService {
 
@@ -113,5 +120,41 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         // 查询对话历史
         return this.page(Page.of(1, pageSize), queryWrapper);
 
+    }
+
+    @Override
+    public int loadChatHistoryToMemory(Long appId, MessageWindowChatMemory chatMemory, int maxCount) {
+        try {
+            // 1.构造查询对话历史条件
+            QueryWrapper queryWrapper = QueryWrapper.create()
+                    .eq(ChatHistory::getAppId, appId)
+                    .orderBy(ChatHistory::getCreateTime, false)// 拿到最新的消息
+                    .limit(1, maxCount);
+            List<ChatHistory> historyList = this.list(queryWrapper);
+            if (CollUtil.isEmpty(historyList)) {
+                return 0;
+            }
+            // 2.反转列表，确保按照时间正序（老消息在前、新消息在后）
+            historyList = CollUtil.reverse(historyList);
+            // 3.先清除缓存，防止重复
+            chatMemory.clear();
+            // 4.将历史对话加载到Redis中
+            int loadedCount = 0;
+            for (ChatHistory history : historyList) {
+                if (ChatHistoryMessageTypeEnum.USER.getValue().equals(history.getMessageType())) {
+                    chatMemory.add(UserMessage.from(history.getMessage()));
+                } else if (ChatHistoryMessageTypeEnum.AI.getValue().equals(history.getMessageType())) {
+                    chatMemory.add(AiMessage.from(history.getMessage()));
+                }
+                loadedCount++;
+            }
+            // 6.记录日志，返回加载条数
+            log.info("加载历史对话到内存中，应用id：{}，加载条数：{}", appId, loadedCount);
+            return loadedCount;
+        } catch (Exception e) {
+            // 加载失败不影响系统运行，只是没有上下文
+            log.error("加载历史对话失败，应用id：{}，错误消息：{}", appId, e.getMessage(), e);
+            return 0;
+        }
     }
 }
