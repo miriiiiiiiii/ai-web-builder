@@ -76,3 +76,9 @@ langchain4j:
       max-tokens: 8192
       log-requests: true
       log-responses: true
+    reasoning-chat-model:
+      base-url: https://api.deepseek.com
+      api-key: <Your API Key>
+      model-name: deepseek-reasoner
+      log-requests: true
+      log-responses: true

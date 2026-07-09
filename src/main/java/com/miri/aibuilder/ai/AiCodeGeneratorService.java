@@ -2,7 +2,10 @@ package com.miri.aibuilder.ai;
 
 import com.miri.aibuilder.ai.model.HtmlCodeResult;
 import com.miri.aibuilder.ai.model.MultiFileCodeResult;
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.service.UserMessage;
 import reactor.core.publisher.Flux;
 
 
@@ -40,4 +43,13 @@ public interface AiCodeGeneratorService {
      */
     @SystemMessage(fromResource = "prompt/multi-file-codegen-prompt.txt")
     Flux<String> generateMultiFileCodeStream(String userMessage);
+
+    /**
+     * 生成Vue项目代码（流式）
+     *
+     * @param userMessage 用户提示词
+     * @return
+     */
+    @SystemMessage(fromResource = "prompt/vue-project-codegen-prompt.txt")
+    TokenStream generateVueProjectCodeStream(@MemoryId long appId, @UserMessage String userMessage);
 }

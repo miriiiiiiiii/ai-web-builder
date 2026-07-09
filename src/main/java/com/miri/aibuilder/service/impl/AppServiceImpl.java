@@ -7,6 +7,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.miri.aibuilder.constant.AppConstant;
 import com.miri.aibuilder.core.AiCodeGeneratorFacade;
+import com.miri.aibuilder.core.handler.StreamHandlerExecutor;
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.exception.ThrowUtils;
@@ -55,6 +56,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private ChatHistoryService chatHistoryService;
 
+    @Resource
+    private StreamHandlerExecutor streamHandlerExecutor;
+
     @Override
     public Flux<String> chatToGenCode(String userMessage, Long appId, User loginUser) {
         // 1.参数校验
@@ -75,25 +79,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 6.调用接口生成并保存代码
         Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(userMessage, codeGenTypeEnum, appId);
         // 7.拼接ai的响应内容，完成后保存到对话历史
-        StringBuilder stringBuilder = new StringBuilder();
-        return contentFlux
-                .map(chunk -> {
-                    // 拼接 chunk
-                    stringBuilder.append(chunk);
-                    return chunk;
-                })
-                .doOnComplete(() -> {
-                    // 流式响应完成后，保存AI回复到对话历史
-                    String aiResponse = stringBuilder.toString();
-                    if (StrUtil.isNotBlank(aiResponse)) {
-                        chatHistoryService.addChatHistory(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
-                    }
-                })
-                .doOnError(error -> {
-                    // AI回复失败，也保存错误信息到对话历史
-                    String errorMessage = error.getMessage();
-                    chatHistoryService.addChatHistory(appId, errorMessage, ChatHistoryMessageTypeEnum.AI.getValue(), null);
-                });
+        return streamHandlerExecutor.doExecute(contentFlux, chatHistoryService, appId, loginUser, codeGenTypeEnum);
     }
 
     @Override
