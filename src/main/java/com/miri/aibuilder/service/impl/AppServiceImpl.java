@@ -7,6 +7,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.miri.aibuilder.constant.AppConstant;
 import com.miri.aibuilder.core.AiCodeGeneratorFacade;
+import com.miri.aibuilder.core.builder.VueProjectBuilder;
 import com.miri.aibuilder.core.handler.StreamHandlerExecutor;
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
@@ -59,6 +60,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private StreamHandlerExecutor streamHandlerExecutor;
 
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
+
     @Override
     public Flux<String> chatToGenCode(String userMessage, Long appId, User loginUser) {
         // 1.参数校验
@@ -107,17 +111,28 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用代码不存在，请先生成代码");
         }
-        // 7.构建部署目录，复制文件到部署目录
+        // 7.Vue 项目特殊处理：执行构建
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(bizType);
+        if (CodeGenTypeEnum.VUE_PROJECT == codeGenTypeEnum) {
+            boolean buildSuccess = vueProjectBuilder.buildProject(sourceFilePath);
+            ThrowUtils.throwIf(!buildSuccess, ErrorCode.SYSTEM_ERROR, "Vue 项目构建失败");
+            File distDir = new File(sourceFilePath, "dist");
+            ThrowUtils.throwIf(!distDir.exists(), ErrorCode.SYSTEM_ERROR, "Vue 项目构建完成单未生成 dist 目录");
+            // 将 dist 目录作为部署源
+            sourceDir = distDir;
+            log.info("Vue 项目构建成功，将部署到 dist 目录：{}", distDir.getAbsolutePath());
+        }
+        // 8.构建部署目录，复制文件到部署目录
         String deployFilePath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
         FileUtil.copyContent(sourceDir, new File(deployFilePath), true);
-        // 8.更新应用deployKey和部署时间
+        // 9.更新应用deployKey和部署时间
         App updateApp = new App();
         updateApp.setId(appId);
         updateApp.setDeployKey(deployKey);
         updateApp.setDeployedTime(LocalDateTime.now());
         boolean result = this.updateById(updateApp);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用部署失败");
-        // 9.返回可访问的部署路径
+        // 10.返回可访问的部署路径
         return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
     }
 
