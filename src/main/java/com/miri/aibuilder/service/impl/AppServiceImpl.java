@@ -22,6 +22,7 @@ import com.miri.aibuilder.model.vo.AppVO;
 import com.miri.aibuilder.model.vo.UserVO;
 import com.miri.aibuilder.service.AppService;
 import com.miri.aibuilder.service.ChatHistoryService;
+import com.miri.aibuilder.service.ScreenshotService;
 import com.miri.aibuilder.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.util.SqlUtil;
@@ -62,6 +63,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private VueProjectBuilder vueProjectBuilder;
+
+    @Resource
+    private ScreenshotService screenshotService;
 
     @Override
     public Flux<String> chatToGenCode(String userMessage, Long appId, User loginUser) {
@@ -133,7 +137,24 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         boolean result = this.updateById(updateApp);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用部署失败");
         // 10.返回可访问的部署路径
-        return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        String deployUrl =  String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 11.异步生成截图并更新应用封面
+        generateAppScreenshotAsync(appId, deployUrl);
+        return deployUrl;
+    }
+
+    @Override
+    public void generateAppScreenshotAsync(Long appId, String appUrl) {
+        Thread.startVirtualThread(() -> {
+           // 调用截图服务：生成截图并上传COS对象存储
+            String screenshotUrl = screenshotService.generateAndUploadScreenshot(appUrl);
+            // 更新应用封面
+            App updateApp = new App();
+            updateApp.setId(appId);
+            updateApp.setCover(screenshotUrl);
+            boolean updated = this.updateById(updateApp);
+            ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "应用封面更新失败");
+        });
     }
 
     @Override
