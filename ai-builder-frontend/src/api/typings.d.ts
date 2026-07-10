@@ -148,6 +148,10 @@ declare namespace API {
     id?: number
   }
 
+  type downloadAppCodeParams = {
+    appId: number
+  }
+
   type EmailLoginRequest = {
     userEmail?: string
     code?: string
