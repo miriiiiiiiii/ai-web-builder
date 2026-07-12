@@ -4,6 +4,7 @@ package com.miri.aibuilder.ai;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.miri.aibuilder.ai.tools.FileWriteTool;
+import com.miri.aibuilder.ai.tools.ToolManager;
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.model.enums.CodeGenTypeEnum;
@@ -42,6 +43,9 @@ public class AiCodeGeneratorServiceFactory {
     @Resource
     private ChatHistoryService chatHistoryService;
 
+    @Resource
+    private ToolManager toolManager;
+
     /**
      * 缓存 AiCodeGeneratorService 实例
      * 缓存策略：最大缓存 1000 个实例，写入后 30 分钟过期，访问后 10 分钟过期
@@ -78,7 +82,7 @@ public class AiCodeGeneratorServiceFactory {
                     .chatModel(chatModel)
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemoryProvider(memoryId -> chatMemory)
-                    .tools(new FileWriteTool())
+                    .tools(toolManager.getAllTools())
                     // 处理工具调用的幻觉
                     .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
                             toolExecutionRequest, "Error: There is no tool called " + toolExecutionRequest.name()))

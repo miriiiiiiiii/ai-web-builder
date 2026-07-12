@@ -86,13 +86,72 @@
           </div>
         </div>
 
+        <!-- 选中元素信息展示【横向滚动代码块 仿AI工具弹窗效果】 -->
+        <a-alert
+          v-if="selectedElementInfo"
+          class="selected-element-alert scroll-code-style"
+          type="info"
+          closable
+          @close="clearSelectedElement"
+        >
+          <template #message>
+            <div class="scroll-card-wrap">
+              <div class="scroll-card-title">
+                <span class="title-dot"></span>
+                <span>可视化编辑 · 已选中页面元素</span>
+              </div>
+
+              <!-- 标签行 -->
+              <div class="badge-row">
+                <div class="badge-item">
+                  <span class="label-sm">标签</span>
+                  <span class="code-badge blue">{{ selectedElementInfo.tagName.toLowerCase() }}</span>
+                </div>
+                <div v-if="selectedElementInfo.id" class="badge-item">
+                  <span class="label-sm">ID</span>
+                  <span class="code-badge green">#{{ selectedElementInfo.id }}</span>
+                </div>
+                <div v-if="selectedElementInfo.className" class="badge-item">
+                  <span class="label-sm">Class</span>
+                  <span class="code-badge yellow">.{{ selectedElementInfo.className.split(' ').join('.') }}</span>
+                </div>
+              </div>
+
+              <!-- 文本内容 -->
+              <div v-if="selectedElementInfo.textContent" class="text-row">
+                <span class="row-label">当前文字</span>
+                <span class="row-text">
+                  {{ selectedElementInfo.textContent.substring(0, 70) }}
+                  {{ selectedElementInfo.textContent.length > 70 ? '...' : '' }}
+                </span>
+              </div>
+
+              <!-- 页面路径 -->
+              <div v-if="selectedElementInfo.pagePath" class="text-row">
+                <span class="row-label">页面路径</span>
+                <span class="row-text path-text">{{ selectedElementInfo.pagePath }}</span>
+              </div>
+
+              <!-- 超长CSS选择器 横向滚动容器【核心滑动效果】 -->
+              <div class="selector-wrap">
+                <span class="row-label">CSS精准选择器</span>
+                <!-- 横向滚动盒子，超长文字左右拖动滑动 -->
+                <div class="horizontal-scroll-box">
+                  <code class="long-selector">{{ selectedElementInfo.selector }}</code>
+                </div>
+                <div class="scroll-tip">← 左右拖动查看完整选择器 →</div>
+              </div>
+            </div>
+          </template>
+        </a-alert>
+
         <!-- 用户消息输入框 -->
         <div class="input-container">
           <div class="input-wrapper">
             <a-tooltip v-if="!isOwner" title="无法在别人的作品下对话哦~" placement="top">
               <a-textarea
                 v-model:value="userInput"
-                placeholder="请描述你想生成的网站，越详细效果越好哦"
+                :placeholder="getInputPlaceholder()"
                 :rows="4"
                 :maxlength="1000"
                 @keydown.enter.prevent="sendMessage"
@@ -102,7 +161,7 @@
             <a-textarea
               v-else
               v-model:value="userInput"
-              placeholder="请描述你想生成的网站，越详细效果越好哦"
+              :placeholder="getInputPlaceholder()"
               :rows="4"
               :maxlength="1000"
               @keydown.enter.prevent="sendMessage"
@@ -128,6 +187,19 @@
         <div class="preview-header">
           <h3>生成后的网页展示</h3>
           <div class="preview-actions">
+            <a-button
+              v-if="isOwner && previewUrl"
+              type="link"
+              :danger="isEditMode"
+              @click="toggleEditMode"
+              :class="{ 'edit-mode-active': isEditMode }"
+              style="padding: 0; height: auto; margin-right: 12px"
+            >
+              <template #icon>
+                <EditOutlined />
+              </template>
+              {{ isEditMode ? '退出编辑' : '编辑模式' }}
+            </a-button>
             <a-button v-if="previewUrl" type="link" @click="openInNewTab">
               <template #icon>
                 <ExportOutlined />
@@ -195,13 +267,15 @@ import AppDetailModal from '@/components/AppDetailModal.vue'
 import DeploySuccessModal from '@/components/DeploySuccessModal.vue'
 import aiAvatar from '@/assets/aiAvatar.png'
 import { API_BASE_URL, getStaticPreviewUrl } from '@/config/env'
+import { VisualEditor, type ElementInfo } from '@/utils/visualEditor'
 
 import {
   CloudUploadOutlined,
   SendOutlined,
   ExportOutlined,
   InfoCircleOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  EditOutlined,
 } from '@ant-design/icons-vue'
 
 const route = useRoute()
@@ -210,7 +284,7 @@ const loginUserStore = useLoginUserStore()
 
 // 应用信息
 const appInfo = ref<API.AppVO>()
-const appId = ref<string>()
+const appId = ref<any>()
 
 // 对话相关
 interface Message {
@@ -239,6 +313,15 @@ const previewReady = ref(false)
 const deploying = ref(false)
 const deployModalVisible = ref(false)
 const deployUrl = ref('')
+
+// 可视化编辑相关
+const isEditMode = ref(false)
+const selectedElementInfo = ref<ElementInfo | null>(null)
+const visualEditor = new VisualEditor({
+  onElementSelected: (elementInfo: ElementInfo) => {
+    selectedElementInfo.value = elementInfo
+  },
+})
 
 // 权限相关
 const isOwner = computed(() => {
@@ -383,20 +466,40 @@ const sendInitialMessage = async (prompt: string) => {
   await generateCode(prompt, aiMessageIndex)
 }
 
-// 发送消息
+// 发送消息【格式化分层文本不变，气泡支持换行】
 const sendMessage = async () => {
   if (!userInput.value.trim() || isGenerating.value) {
     return
   }
 
-  const message = userInput.value.trim()
+  let message = userInput.value.trim()
+  // 如果有选中的元素，标准化分层拼接提示文本
+  if (selectedElementInfo.value) {
+    const el = selectedElementInfo.value
+    let elementContext = `
+========== 📍编辑目标 ==========
+标签：${el.tagName.toLowerCase()}
+CSS选择器：${el.selector}`
+    if (el.pagePath) elementContext += `\n页面路径：${el.pagePath}`
+    if (el.textContent) elementContext += `\n当前文字：${el.textContent.substring(0, 100)}`
+    elementContext += `\n===========================`
+    message += elementContext
+  }
   userInput.value = ''
 
-  // 添加用户消息
+  // 添加用户消息（包含标准化分层元素信息）
   messages.value.push({
     type: 'user',
     content: message,
   })
+
+  // 发送消息后，清除选中元素并退出编辑模式
+  if (selectedElementInfo.value) {
+    clearSelectedElement()
+    if (isEditMode.value) {
+      toggleEditMode()
+    }
+  }
 
   // 添加AI消息占位符
   const aiMessageIndex = messages.value.length
@@ -569,6 +672,11 @@ const openDeployedSite = () => {
 // iframe加载完成
 const onIframeLoad = () => {
   previewReady.value = true
+  const iframe = document.querySelector('.preview-iframe') as HTMLIFrameElement
+  if (iframe) {
+    visualEditor.init(iframe)
+    visualEditor.onIframeLoad()
+  }
 }
 
 // 编辑应用
@@ -597,9 +705,43 @@ const deleteApp = async () => {
   }
 }
 
+// 可视化编辑相关函数
+const toggleEditMode = () => {
+  // 检查 iframe 是否已经加载
+  const iframe = document.querySelector('.preview-iframe') as HTMLIFrameElement
+  if (!iframe) {
+    message.warning('请等待页面加载完成')
+    return
+  }
+  // 确保 visualEditor 已初始化
+  if (!previewReady.value) {
+    message.warning('请等待页面加载完成')
+    return
+  }
+  const newEditMode = visualEditor.toggleEditMode()
+  isEditMode.value = newEditMode
+}
+
+const clearSelectedElement = () => {
+  selectedElementInfo.value = null
+  visualEditor.clearSelection()
+}
+
+const getInputPlaceholder = () => {
+  if (selectedElementInfo.value) {
+    return `已选中${selectedElementInfo.value.tagName.toLowerCase()}标签，请描述修改需求（文字/颜色/尺寸/布局等）`
+  }
+  return '请描述你想生成的网站，越详细效果越好哦'
+}
+
 // 页面加载时获取应用信息
 onMounted(() => {
   fetchAppInfo()
+
+  // 监听 iframe 消息
+  window.addEventListener('message', (event) => {
+    visualEditor.handleIframeMessage(event)
+  })
 })
 
 // 清理资源
@@ -754,6 +896,7 @@ const downloadCode = async () => {
 .user-message .message-content {
   background: #1890ff;
   color: white;
+  white-space: pre-wrap;
 }
 
 .ai-message .message-content {
@@ -771,6 +914,13 @@ const downloadCode = async () => {
   align-items: center;
   gap: 8px;
   color: #666;
+}
+
+/* 加载更多按钮 */
+.load-more-container {
+  text-align: center;
+  padding: 8px 0;
+  margin-bottom: 16px;
 }
 
 /* 输入区域 */
@@ -862,13 +1012,140 @@ const downloadCode = async () => {
   border: none;
 }
 
+/* ===================== 仿AI工具横向滚动代码块样式【核心】 ===================== */
+.selected-element-alert {
+  margin: 0 16px 14px;
+  border-radius: 12px;
+}
+.selected-element-alert.scroll-code-style :deep(.ant-alert-content) {
+  padding: 0;
+}
+.scroll-card-wrap {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid #e5e7eb;
+}
+.scroll-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+.title-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+}
+
+/* 标签行 */
+.badge-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.badge-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.label-sm {
+  font-size: 12px;
+  color: #6b7280;
+}
+.code-badge {
+  font-family: 'Menlo', monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.code-badge.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.code-badge.green {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+.code-badge.yellow {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+/* 普通文本行 */
+.text-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.row-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+.row-text {
+  font-size: 13px;
+  color: #1f2937;
+  word-break: break-all;
+}
+.path-text {
+  color: #4f46e5;
+}
+
+/* 横向滚动容器 核心滑动效果 */
+.selector-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.horizontal-scroll-box {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #f7f8fa;
+  border-radius: 8px;
+  padding: 10px 12px;
+  /* 鼠标拖动滚动 */
+  cursor: grab;
+}
+.horizontal-scroll-box:active {
+  cursor: grabbing;
+}
+/* 隐藏原生滚动条美化 */
+.horizontal-scroll-box::-webkit-scrollbar {
+  height: 5px;
+}
+.horizontal-scroll-box::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 10px;
+}
+.horizontal-scroll-box::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 10px;
+}
+.long-selector {
+  font-family: 'Menlo', 'Monaco', monospace;
+  font-size: 12px;
+  color: #dc2626;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.scroll-tip {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+}
 
 /* 响应式设计 */
 @media (max-width: 1024px) {
   .main-content {
     flex-direction: column;
   }
-
   .chat-section,
   .preview-section {
     flex: none;
@@ -877,20 +1154,32 @@ const downloadCode = async () => {
 }
 
 @media (max-width: 768px) {
-  .header-card :deep(.ant-card-body) {
-    padding: 12px;
+  .header-bar {
+    padding: 12px 16px;
   }
   .app-name {
     font-size: 16px;
   }
-
   .main-content {
     padding: 8px;
     gap: 8px;
   }
-
   .message-content {
     max-width: 85%;
+  }
+  .badge-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  /* 编辑模式按钮样式 */
+  .edit-mode-active {
+    background-color: #52c41a !important;
+    border-color: #52c41a !important;
+    color: white !important;
+  }
+  .edit-mode-active:hover {
+    background-color: #73d13d !important;
+    border-color: #73d13d !important;
   }
 }
 </style>
