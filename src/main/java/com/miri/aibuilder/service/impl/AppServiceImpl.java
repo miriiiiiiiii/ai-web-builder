@@ -5,6 +5,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import com.miri.aibuilder.ai.AiCodeGenTypeRoutingService;
 import com.miri.aibuilder.constant.AppConstant;
 import com.miri.aibuilder.core.AiCodeGeneratorFacade;
 import com.miri.aibuilder.core.builder.VueProjectBuilder;
@@ -13,6 +14,7 @@ import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.exception.ThrowUtils;
 import com.miri.aibuilder.mapper.AppMapper;
+import com.miri.aibuilder.model.dto.app.AppAddRequest;
 import com.miri.aibuilder.model.dto.app.AppQueryRequest;
 import com.miri.aibuilder.model.entity.App;
 import com.miri.aibuilder.model.entity.User;
@@ -24,8 +26,8 @@ import com.miri.aibuilder.service.AppService;
 import com.miri.aibuilder.service.ChatHistoryService;
 import com.miri.aibuilder.service.ScreenshotService;
 import com.miri.aibuilder.service.UserService;
+import com.miri.aibuilder.utils.AppNameExtractUtils;
 import com.mybatisflex.core.query.QueryWrapper;
-import com.mybatisflex.core.util.SqlUtil;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -35,10 +37,7 @@ import reactor.core.publisher.Flux;
 import java.io.File;
 import java.io.Serializable;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -67,6 +66,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private ScreenshotService screenshotService;
 
+    @Resource
+    private AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
+
+
     @Override
     public Flux<String> chatToGenCode(String userMessage, Long appId, User loginUser) {
         // 1.参数校验
@@ -88,6 +91,28 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(userMessage, codeGenTypeEnum, appId);
         // 7.拼接ai的响应内容，完成后保存到对话历史
         return streamHandlerExecutor.doExecute(contentFlux, chatHistoryService, appId, loginUser, codeGenTypeEnum);
+    }
+
+    @Override
+    public Long createApp(AppAddRequest appAddRequest, User loginUser) {
+        // 1.参数校验
+        String initPrompt = appAddRequest.getInitPrompt();
+        ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
+        // 2.构造入库对象
+        App app = new App();
+        BeanUtil.copyProperties(appAddRequest, app);
+        app.setUserId(loginUser.getId());
+        // 3.提取应用名称
+        String appName  = AppNameExtractUtils.extractAppNameFromPrompt(initPrompt);
+        app.setAppName(appName);
+        // 4.AI 智能选择代码生成类型
+        CodeGenTypeEnum selectedCodeGenTypeEnum = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
+        app.setCodeGenType(selectedCodeGenTypeEnum.getValue());
+        // 5.插入数据库
+        boolean result = this.save(app);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        log.info("创建应用成功，ID：{}，类型：{}", app.getId(), selectedCodeGenTypeEnum.getValue());
+        return app.getId();
     }
 
     @Override
@@ -247,6 +272,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             return appVO;
         }).collect(Collectors.toList());
     }
+
 
     @Override
     public boolean removeById(Serializable id) {

@@ -92,6 +92,11 @@ public class WebScreenshotUtils {
             ChromeOptions options = new ChromeOptions();
             // 无头模式
             options.addArguments("--headless");
+            // 阻止空白窗口弹出
+            options.addArguments("--no-first-run");
+            options.addArguments("--no-default-browser-check");
+            options.addArguments("--window-position=-2000,-2000");
+            options.addArguments("--disable-background-networking");
             // 禁用GPU（在某些环境下避免问题）
             options.addArguments("--disable-gpu");
             // 禁用沙盒模式（Docker环境需要）

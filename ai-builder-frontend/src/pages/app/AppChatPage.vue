@@ -1,12 +1,15 @@
 <template>
   <div id="appChatPage">
     <a-card class="header-card" style="margin-bottom: 16px;">
+      <!-- 顶部栏 -->
       <div class="header-bar">
         <div class="header-left">
           <img :src="logoUrl" alt="logo" class="header-logo" @click="goHome" />
           <h1 class="app-name">{{ appInfo?.appName || '网站生成器' }}</h1>
+          <a-tag v-if="appInfo?.codeGenType" color="blue" class="code-gen-type-tag">
+            {{ formatCodeGenType(appInfo.codeGenType) }}
+          </a-tag>
         </div>
-
         <div class="header-right">
           <!-- 只有应用所有者或管理员可查看应用详情 -->
           <a-button
@@ -183,7 +186,7 @@ import {
   deleteApp as deleteAppApi,
 } from '@/api/appController'
 import { listAppChatHistory } from '@/api/chatHistoryController'
-import { CodeGenTypeEnum } from '@/utils/codeGenTypes'
+import { CodeGenTypeEnum, formatCodeGenType } from '@/utils/codeGenTypes'
 import request from '@/request'
 
 import logoUrl from '@/assets/logo.png'
@@ -673,6 +676,10 @@ const downloadCode = async () => {
   cursor: pointer;
 }
 
+.code-gen-type-tag {
+  font-size: 12px;
+}
+
 .header-left {
   display: flex;
   align-items: center;
@@ -854,6 +861,7 @@ const downloadCode = async () => {
   height: 100%;
   border: none;
 }
+
 
 /* 响应式设计 */
 @media (max-width: 1024px) {

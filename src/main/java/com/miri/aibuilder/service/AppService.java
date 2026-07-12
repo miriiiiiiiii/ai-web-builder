@@ -1,5 +1,6 @@
 package com.miri.aibuilder.service;
 
+import com.miri.aibuilder.model.dto.app.AppAddRequest;
 import com.miri.aibuilder.model.dto.app.AppQueryRequest;
 import com.miri.aibuilder.model.entity.App;
 import com.miri.aibuilder.model.entity.User;
@@ -39,6 +40,14 @@ public interface AppService extends IService<App> {
     List<AppVO> getAppVOList(List<App> appList);
 
     /**
+     * 创建应用
+     * @param appAddRequest 应用信息
+     * @param loginUser
+     * @return
+     */
+    Long createApp(AppAddRequest appAddRequest, User loginUser);
+
+    /**
      * 聊天生成代码
      * @param userMessage 用户消息
      * @param appId 应用ID（流式SSE）
@@ -46,6 +55,8 @@ public interface AppService extends IService<App> {
      * @return
      */
     Flux<String> chatToGenCode(String userMessage, Long appId, User loginUser);
+
+
 
     /**
      * 部署应用
@@ -61,4 +72,6 @@ public interface AppService extends IService<App> {
      * @param appUrl 应用访问URL
      */
     void generateAppScreenshotAsync(Long appId, String appUrl);
+
+
 }
