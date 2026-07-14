@@ -12,25 +12,27 @@ import java.util.regex.Pattern;
 /**
  * 应用名称提取工具
  */
+@Slf4j
 @Component
 public class AppNameExtractUtils {
-    // 开头创建类前缀
+    // 开头创建类前缀【重要！长词优先！长短语放前面】
     private static final List<String> CREATE_PREFIX = Arrays.asList(
-            "生成一个", "做一个", "写一个", "搭建", "开发", "创建", "制作",
-            "搭建一个", "开发一个", "创建一个", "制作一个"
+            "搭建一个", "开发一个", "创建一个", "制作一个", "生成一个", "做一个", "写一个",
+            "生成", "创建", "搭建", "开发",  "制作",
+            "一个", "一款", "一套"
     );
 
-    // 业务后缀列表
+    // 业务后缀列表【长词优先！】
     private static final List<String> BUSINESS_SUFFIX = Arrays.asList(
-            "网站", "商城", "后台", "平台", "页面", "社区", "小游戏", "系统"
+            "小游戏", "管理系统", "网站", "商城", "后台", "平台", "页面", "社区", "系统"
     );
 
-    // 截断分隔标点，遇到任意一个就停止截取
+    // 截断分隔标点（主体结束分隔符）
     private static final String[] SPLIT_CHARS = {
             "，", ",", "。", "；", ";", "：", ":", "\n", "（", "(", "【"
     };
 
-    // 匹配「任意字符+的」正则，只匹配开头修饰段
+    // 匹配开头「xxx的」修饰部分
     private static final Pattern DE_PATTERN = Pattern.compile("^.+?的");
 
     // 名称最大长度
@@ -42,13 +44,13 @@ public class AppNameExtractUtils {
      * @return 应用名称
      */
     public static String extractAppNameFromPrompt(String prompt) {
-        // 1. 空值校验
         if (StrUtil.isBlank(prompt)) {
             return "未命名应用";
         }
-        String text = prompt.trim();
+        String originText = prompt.trim();
+        String text = originText;
 
-        // 2. 循环移除开头所有创建前缀
+        // 1. 循环移除开头创建前缀（长词优先）
         boolean matchPrefix;
         do {
             matchPrefix = false;
@@ -61,54 +63,51 @@ public class AppNameExtractUtils {
             }
         } while (matchPrefix);
 
-        // 3. 移除开头「xxx的」修饰部分
+        // 2. 移除开头「xxx的」修饰
         Matcher deMatcher = DE_PATTERN.matcher(text);
         if (deMatcher.find()) {
-            String matchStr = deMatcher.group();
-            text = text.substring(matchStr.length()).trim();
+            text = text.substring(deMatcher.group().length()).trim();
         }
 
-        // 新增：遇到标点直接截断，只保留标点前文字
-        int splitPoint = text.length();
+        // ============关键修复============
+        // 第一步：先以第一个标点截断，只保留前半段主体，杜绝匹配后半段描述里的业务后缀！
+        int firstSplitIdx = text.length();
         for (String symbol : SPLIT_CHARS) {
             int idx = text.indexOf(symbol);
-            if (idx != -1 && idx < splitPoint) {
-                splitPoint = idx;
+            if (idx != -1 && idx < firstSplitIdx) {
+                firstSplitIdx = idx;
             }
         }
-        text = text.substring(0, splitPoint).trim();
+        // 只保留标点前的主体文本
+        String mainText = text.substring(0, firstSplitIdx).trim();
 
-        // 4. 核心名称+完整后缀
-        int endIndex = text.length();
-        String hitSuffix = "";
+        // 第二步：在主体文本内匹配业务后缀
+        int splitPoint = mainText.length();
+        boolean foundSuffix = false;
         for (String suffix : BUSINESS_SUFFIX) {
-            int idx = text.indexOf(suffix);
+            int idx = mainText.indexOf(suffix);
             if (idx != -1) {
-                endIndex = idx + suffix.length();
-                hitSuffix = suffix;
+                splitPoint = idx + suffix.length();
+                foundSuffix = true;
                 break;
             }
         }
+        String targetName = mainText.substring(0, splitPoint).trim();
 
-        String targetName;
-        if (StrUtil.isNotBlank(hitSuffix)) {
-            targetName = text.substring(0, endIndex).trim();
-        } else {
-            targetName = text;
-        }
-
-        // 5. 清理多余连续空格
+        // 清理连续空格
         targetName = targetName.replaceAll("\\s+", " ");
 
-        // 6. 提取结果为空，截取原提示词前N位
+        // 兜底：提取为空则截取原始文本前N字符
         if (StrUtil.isBlank(targetName)) {
-            return prompt.substring(0, Math.min(prompt.length(), MAX_NAME_LENGTH));
+            targetName = originText.substring(0, Math.min(originText.length(), MAX_NAME_LENGTH));
         }
 
-        // 7. 长度截断控制
-        return targetName.length() > MAX_NAME_LENGTH
+        // 长度截断
+        String finalName = targetName.length() > MAX_NAME_LENGTH
                 ? targetName.substring(0, MAX_NAME_LENGTH)
                 : targetName;
+
+        log.debug("[应用名称提取] 原始prompt:{} | 主体文本:{} | 最终名称:{}", prompt, mainText, finalName);
+        return finalName;
     }
 }
-

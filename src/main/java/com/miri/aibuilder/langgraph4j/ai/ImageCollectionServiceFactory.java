@@ -31,7 +31,7 @@ public class ImageCollectionServiceFactory {
     private UndrawIllustrationTool undrawIllustrationTool;
 
     /**
-     * 创建Ai图片收集服务
+     * 创建 Ai 图片收集服务
      * @return
      */
     @Bean

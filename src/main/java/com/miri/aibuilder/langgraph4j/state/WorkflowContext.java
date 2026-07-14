@@ -1,6 +1,7 @@
 package com.miri.aibuilder.langgraph4j.state;
 
 import com.miri.aibuilder.langgraph4j.model.ImageResource;
+import com.miri.aibuilder.langgraph4j.model.QualityResult;
 import com.miri.aibuilder.model.enums.CodeGenTypeEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -58,6 +59,11 @@ public class WorkflowContext implements Serializable {
     private CodeGenTypeEnum generationType;
 
     /**
+     * 代码质量检查结果
+     */
+    private QualityResult qualityResult;
+
+    /**
      * 生成的代码目录
      */
     private String generatedCodeDir;
@@ -71,6 +77,7 @@ public class WorkflowContext implements Serializable {
      * 错误信息
      */
     private String errorMessage;
+
 
     @Serial
     private static final long serialVersionUID = 1L;

@@ -2,8 +2,10 @@ package com.miri.aibuilder.langgraph4j;
 
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
+import com.miri.aibuilder.langgraph4j.model.QualityResult;
 import com.miri.aibuilder.langgraph4j.node.*;
 import com.miri.aibuilder.langgraph4j.state.WorkflowContext;
+import com.miri.aibuilder.model.enums.CodeGenTypeEnum;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.GraphRepresentation;
@@ -16,6 +18,7 @@ import java.util.Map;
 
 import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
+import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
 
 /**
  * 代码生成工作流（实际应用）
@@ -35,15 +38,21 @@ public class CodeGenWorkflow {
                     .addNode("router", RouterNode.create())
                     .addNode("code_generator", CodeGeneratorNode.create())
                     .addNode("project_builder", ProjectBuilderNode.create())
-
+                    .addNode("code_quality_check", CodeQualityCheckNode.create())
                     // 添加边
                     .addEdge(START, "image_collector")
                     .addEdge("image_collector", "prompt_enhancer")
                     .addEdge("prompt_enhancer", "router")
                     .addEdge("router", "code_generator")
-                    .addEdge("code_generator", "project_builder")
+                    .addEdge("code_generator", "code_quality_check")
+                    // 使用条件边，根据质检结果决定下一步
+                    .addConditionalEdges("code_quality_check",
+                            edge_async(this::routeAfterQualityCheck),
+                            Map.of("build", "project_builder", // 质检通过，且需要构建
+                                    "skip_build", END, // 质检通过，但跳过构建直接结束
+                                    "fail", "code_generator" // 质检不通过，重新生成代码
+                            ))
                     .addEdge("project_builder", END)
-
                     // 编译工作流
                     .compile();
         } catch (GraphStateException e) {
@@ -82,5 +91,45 @@ public class CodeGenWorkflow {
         }
         log.info("代码生成工作流执行完成！");
         return finalContext;
+    }
+
+    /**
+     * 根据质检结果决定下一步
+     *
+     * @param state
+     * @return
+     */
+    private String routeAfterQualityCheck(MessagesState<String> state) {
+        WorkflowContext context = WorkflowContext.getContext(state);
+        QualityResult qualityResult = context.getQualityResult();
+        // 质检不通过
+        if (qualityResult == null || !qualityResult.getIsValid()) {
+            log.error("代码质检未通过，需要重新生成代码");
+            return "fail";
+        }
+        // 质检通过，继续下一步：路由检查
+        log.error("代码质检通过，继续后续流畅");
+        return routeBuildOrSkip(state);
+    }
+
+    /**
+     * 根据代码生成类型决定下一步
+     *
+     * @param state
+     * @return
+     */
+    private String routeBuildOrSkip(MessagesState<String> state) {
+        WorkflowContext context = WorkflowContext.getContext(state);
+        CodeGenTypeEnum codeGenTypeEnum = context.getGenerationType();
+        log.info("【路由判断】当前代码类型：{}", codeGenTypeEnum);
+
+        // HTML 和 MULTI_FILE 不需要构建
+        if (CodeGenTypeEnum.HTML.equals(codeGenTypeEnum) || CodeGenTypeEnum.MULTI_FILE.equals(codeGenTypeEnum)) {
+            log.info("【路由分支】匹配无需构建，返回 skip_build");
+            return "skip_build";
+        }
+        log.info("【路由分支】需要执行构建，返回 build");
+        // VUE_PROJECT 需要构建
+        return "build";
     }
 }
