@@ -78,39 +78,45 @@ const columns = [
   {
     title: 'ID',
     dataIndex: 'id',
-    width: 80,
-    fixed: 'left',
+    width: 130,
+    align: 'center'
   },
   {
     title: '消息内容',
     dataIndex: 'message',
-    width: 300,
+    width: 200,
+    align: 'center'
   },
   {
     title: '消息类型',
     dataIndex: 'messageType',
-    width: 100,
+    width: 70,
+    align: 'center'
   },
   {
     title: '应用ID',
     dataIndex: 'appId',
-    width: 80,
+    width: 130,
+    align: 'center'
   },
   {
     title: '用户ID',
     dataIndex: 'userId',
-    width: 80,
+    width: 130,
+    align: 'center'
   },
   {
     title: '创建时间',
     dataIndex: 'createTime',
     width: 160,
+    align: 'center'
   },
   {
     title: '操作',
     key: 'action',
     width: 180,
     fixed: 'right',
+    align: 'center'
   },
 ]
 
