@@ -21,6 +21,7 @@ const md: MarkdownIt = new MarkdownIt({
   html: true,
   linkify: true,
   typographer: true,
+  breaks: true,
   highlight: function (str: string, lang: string): string {
     if (lang && hljs.getLanguage(lang)) {
       try {
@@ -38,10 +39,18 @@ const md: MarkdownIt = new MarkdownIt({
   },
 })
 
+// 兼容Markdown 标题缺少空格问题，例如 ##网站生成计划
+const normalizeMarkdown = (content: string) => {
+  return content
+    .replace(/(^|\n)(#{1,6})\s*网站生成计划\s*/g, '$1$2 网站生成计划\n\n')
+    .replace(/(^|\n)(#{1,6})([^\s#])/g, '$1$2 $3')
+}
+
 // 计算渲染后的 Markdown
 const renderedMarkdown = computed(() => {
-  return md.render(props.content)
+  return md.render(normalizeMarkdown(props.content))
 })
+
 </script>
 
 <style scoped>

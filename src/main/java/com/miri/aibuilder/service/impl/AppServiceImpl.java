@@ -7,12 +7,13 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.miri.aibuilder.ai.AiCodeGenTypeRoutingService;
 import com.miri.aibuilder.constant.AppConstant;
-import com.miri.aibuilder.core.AiCodeGeneratorFacade;
 import com.miri.aibuilder.core.builder.VueProjectBuilder;
+import com.miri.aibuilder.core.handler.SimpleTextStreamHandler;
 import com.miri.aibuilder.core.handler.StreamHandlerExecutor;
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.exception.ThrowUtils;
+import com.miri.aibuilder.langgraph4j.CodeGenWorkflow;
 import com.miri.aibuilder.mapper.AppMapper;
 import com.miri.aibuilder.model.dto.app.AppAddRequest;
 import com.miri.aibuilder.model.dto.app.AppQueryRequest;
@@ -52,9 +53,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private UserService userService;
 
     @Resource
-    private AiCodeGeneratorFacade aiCodeGeneratorFacade;
-
-    @Resource
     private ChatHistoryService chatHistoryService;
 
     @Resource
@@ -68,6 +66,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
+
+    @Resource
+    private CodeGenWorkflow codeGenWorkflow;
 
 
     @Override
@@ -87,10 +88,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
         // 5.调用ai前，保存用户消息到对话历史
         chatHistoryService.addChatHistory(appId, userMessage, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
-        // 6.调用接口生成并保存代码
-        Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(userMessage, codeGenTypeEnum, appId);
-        // 7.拼接ai的响应内容，完成后保存到对话历史
-        return streamHandlerExecutor.doExecute(contentFlux, chatHistoryService, appId, loginUser, codeGenTypeEnum);
+        // 6.调用工作流生成并保存代码
+        Flux<String> contentFlux = codeGenWorkflow.executeWorkflowStream(userMessage, appId, codeGenTypeEnum);
+        // 7.工作流输出已经是可直接展示的文本流，按简单文本方式保存对话历史
+        return new SimpleTextStreamHandler().handle(contentFlux, chatHistoryService, appId, loginUser);
     }
 
     @Override

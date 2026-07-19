@@ -2,6 +2,7 @@ package com.miri.aibuilder.langgraph4j.node;
 
 import com.miri.aibuilder.constant.AppConstant;
 import com.miri.aibuilder.core.AiCodeGeneratorFacade;
+import com.miri.aibuilder.core.handler.JsonMessageStreamHandler;
 import com.miri.aibuilder.langgraph4j.model.QualityResult;
 import com.miri.aibuilder.langgraph4j.state.WorkflowContext;
 import com.miri.aibuilder.model.enums.CodeGenTypeEnum;
@@ -12,6 +13,8 @@ import org.bsc.langgraph4j.prebuilt.MessagesState;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
@@ -24,6 +27,7 @@ public class CodeGeneratorNode {
     public static AsyncNodeAction<MessagesState<String>> create() {
         return node_async(state -> {
             WorkflowContext context = WorkflowContext.getContext(state);
+            context.emitStream("正在生成代码...  \n\n");
             log.info("执行节点: 代码生成");
 
             // 构造用户消息，包含原始提示词和可能的错误修复信息
@@ -32,12 +36,16 @@ public class CodeGeneratorNode {
             // 获取 AI 代码生成外观服务
             AiCodeGeneratorFacade codeGeneratorFacade = SpringContextUtil.getBean(AiCodeGeneratorFacade.class);
             log.info("开始生成代码，类型: {} ({})", generationType.getValue(), generationType.getText());
-            // 先使用固定的 appId (后续再整合到业务中)
-            Long appId = 0L;
-            // 调用流式代码生成
+            Long appId = context.getAppId();
+            if (appId == null || appId <= 0) {
+                throw new IllegalArgumentException("应用 ID 无效，无法保存生成代码");
+            }
+            // 调用流式代码生成，HTML / MULTI_FILE 会在流完成后解析并保存，VUE_PROJECT 会通过工具调用保存文件
             Flux<String> codeStream = codeGeneratorFacade.generateAndSaveCodeStream(userMessage, generationType, appId);
-            // 同步等待流式输出完成
-            codeStream.blockLast(Duration.ofMinutes(10)); // 最多等待 10 分钟
+            Set<String> seenToolIds = new HashSet<>();
+            // 同步等待流式输出完成，同时把 AI 生成内容实时转发给前端
+            codeStream.doOnNext(chunk -> emitDisplayChunk(context, chunk, generationType, seenToolIds))
+                    .blockLast(Duration.ofMinutes(10));
             // 根据类型设置生成目录
             String generatedCodeDir = String.format("%s/%s_%s", AppConstant.CODE_OUTPUT_ROOT_DIR, generationType.getValue(), appId);
             log.info("AI 代码生成完成，生成目录: {}", generatedCodeDir);
@@ -47,6 +55,57 @@ public class CodeGeneratorNode {
             context.setGeneratedCodeDir(generatedCodeDir);
             return WorkflowContext.saveContext(context);
         });
+    }
+
+    /**
+     * 输出前端可展示的流式内容
+     */
+    private static void emitDisplayChunk(WorkflowContext context, String chunk, CodeGenTypeEnum generationType, Set<String> seenToolIds) {
+        if (!CodeGenTypeEnum.VUE_PROJECT.equals(generationType)) {
+            context.emitStream(chunk);
+            return;
+        }
+        String displayText = handleJsonMessageStream(chunk, seenToolIds);
+        if (StrUtil.isNotBlank(displayText)) {
+            context.emitStream(displayText);
+        }
+    }
+
+    /**
+     * 处理 VUE_PROJECT 类型的复杂流式响应
+     */
+    private static String handleJsonMessageStream(String chunk, Set<String> seenToolIds) {
+        try {
+            StreamMessage streamMessage = JSONUtil.toBean(chunk, StreamMessage.class);
+            StreamMessageTypeEnum typeEnum = StreamMessageTypeEnum.getEnumByValue(streamMessage.getType());
+            if (typeEnum == null) {
+                return "";
+            }
+            return switch (typeEnum) {
+                case AI_RESPONSE -> JSONUtil.toBean(chunk, AiResponseMessage.class).getData();
+                case TOOL_REQUEST -> {
+                    ToolRequestMessage toolRequestMessage = JSONUtil.toBean(chunk, ToolRequestMessage.class);
+                    String toolId = toolRequestMessage.getId();
+                    if (StrUtil.isBlank(toolId) || seenToolIds.contains(toolId)) {
+                        yield "";
+                    }
+                    seenToolIds.add(toolId);
+                    ToolManager toolManager = SpringContextUtil.getBean(ToolManager.class);
+                    BaseTool tool = toolManager.getTool(toolRequestMessage.getName());
+                    yield tool.generateToolRequestResponse();
+                }
+                case TOOL_EXECUTED -> {
+                    ToolExecutedMessage toolExecutedMessage = JSONUtil.toBean(chunk, ToolExecutedMessage.class);
+                    ToolManager toolManager = SpringContextUtil.getBean(ToolManager.class);
+                    BaseTool tool = toolManager.getTool(toolExecutedMessage.getName());
+                    JSONObject jsonObject = JSONUtil.parseObj(toolExecutedMessage.getArguments());
+                    yield String.format("\n\n%s\n\n", tool.generateToolExecutedResult(jsonObject));
+                }
+            };
+        } catch (Exception e) {
+            log.warn("Vue 项目流式消息解析失败，已忽略当前片段: {}", e.getMessage());
+            return "";
+        }
     }
 
     /**

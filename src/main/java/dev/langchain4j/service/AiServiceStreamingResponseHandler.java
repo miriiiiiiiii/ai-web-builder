@@ -120,7 +120,13 @@ class AiServiceStreamingResponseHandler implements StreamingChatResponseHandler 
             for (ToolExecutionRequest toolExecutionRequest : aiMessage.toolExecutionRequests()) {
                 String toolName = toolExecutionRequest.name();
                 ToolExecutor toolExecutor = toolExecutors.get(toolName);
-                String toolExecutionResult = toolExecutor.execute(toolExecutionRequest, memoryId);
+                String toolExecutionResult;
+                if (toolExecutor == null) {
+                    toolExecutionResult = "Error: There is no tool called " + toolName;
+                    LOG.warn("No tool executor found for tool name: {}, request: {}", toolName, toolExecutionRequest);
+                } else {
+                    toolExecutionResult = toolExecutor.execute(toolExecutionRequest, memoryId);
+                }
                 ToolExecutionResultMessage toolExecutionResultMessage =
                         ToolExecutionResultMessage.from(toolExecutionRequest, toolExecutionResult);
                 addToMemory(toolExecutionResultMessage);

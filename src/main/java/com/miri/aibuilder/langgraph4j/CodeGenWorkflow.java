@@ -1,5 +1,6 @@
 package com.miri.aibuilder.langgraph4j;
 
+import cn.hutool.core.util.StrUtil;
 import com.miri.aibuilder.exception.BusinessException;
 import com.miri.aibuilder.exception.ErrorCode;
 import com.miri.aibuilder.langgraph4j.model.QualityResult;
@@ -13,6 +14,9 @@ import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.NodeOutput;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import org.bsc.langgraph4j.prebuilt.MessagesStateGraph;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
 
@@ -24,6 +28,7 @@ import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
  * 代码生成工作流（实际应用）
  */
 @Slf4j
+@Component
 public class CodeGenWorkflow {
 
     /**
@@ -64,24 +69,31 @@ public class CodeGenWorkflow {
      * 执行工作流
      */
     public WorkflowContext executeWorkflow(String originalPrompt) {
+        return executeWorkflow(originalPrompt, null, null);
+    }
+
+    /**
+     * 执行业务代码生成工作流
+     */
+    public WorkflowContext executeWorkflow(String originalPrompt, Long appId, CodeGenTypeEnum codeGenTypeEnum) {
         CompiledGraph<MessagesState<String>> workflow = createWorkflow();
 
-        // 初始化 WorkflowContext
         WorkflowContext initialContext = WorkflowContext.builder()
+                .appId(appId)
                 .originalPrompt(originalPrompt)
+                .generationType(codeGenTypeEnum)
                 .currentStep("初始化")
                 .build();
 
         GraphRepresentation graph = workflow.getGraph(GraphRepresentation.Type.MERMAID);
         log.info("工作流图:\n{}", graph.content());
-        log.info("开始执行代码生成工作流");
+        log.info("开始执行代码生成工作流，appId: {}，codeGenType: {}", appId, codeGenTypeEnum);
 
         WorkflowContext finalContext = null;
         int stepCounter = 1;
         for (NodeOutput<MessagesState<String>> step : workflow.stream(
                 Map.of(WorkflowContext.WORKFLOW_CONTEXT_KEY, initialContext))) {
             log.info("--- 第 {} 步完成 ---", stepCounter);
-            // 显示当前状态
             WorkflowContext currentContext = WorkflowContext.getContext(step.state());
             if (currentContext != null) {
                 finalContext = currentContext;
@@ -89,8 +101,60 @@ public class CodeGenWorkflow {
             }
             stepCounter++;
         }
-        log.info("代码生成工作流执行完成！");
+        log.info("代码生成工作流执行完成，appId: {}", appId);
         return finalContext;
+    }
+
+    /**
+     * 流式执行业务代码生成工作流
+     */
+    public Flux<String> executeWorkflowStream(String originalPrompt, Long appId, CodeGenTypeEnum codeGenTypeEnum) {
+        return Flux.<String>create(sink -> {
+            try {
+                CompiledGraph<MessagesState<String>> workflow = createWorkflow();
+
+                final String streamEmitterId = WorkflowContext.registerStreamEmitter(sink::next);
+                WorkflowContext initialContext = WorkflowContext.builder()
+                        .appId(appId)
+                        .originalPrompt(originalPrompt)
+                        .generationType(codeGenTypeEnum)
+                        .currentStep("初始化")
+                        .streamEmitterId(streamEmitterId)
+                        .build();
+
+                GraphRepresentation graph = workflow.getGraph(GraphRepresentation.Type.MERMAID);
+                log.info("工作流图:\n{}", graph.content());
+                log.info("开始流式执行代码生成工作流，appId: {}，codeGenType: {}", appId, codeGenTypeEnum);
+
+                WorkflowContext finalContext = null;
+                for (NodeOutput<MessagesState<String>> step : workflow.stream(
+                        Map.of(WorkflowContext.WORKFLOW_CONTEXT_KEY, initialContext))) {
+                    WorkflowContext currentContext = WorkflowContext.getContext(step.state());
+                    if (currentContext == null) {
+                        continue;
+                    }
+                    finalContext = currentContext;
+                    log.info("当前步骤上下文: {}", currentContext);
+                }
+
+                if (finalContext == null) {
+                    sink.error(new BusinessException(ErrorCode.OPERATION_ERROR, "代码生成工作流执行失败"));
+                    return;
+                }
+                if (StrUtil.isNotBlank(finalContext.getErrorMessage())) {
+                    sink.error(new BusinessException(ErrorCode.OPERATION_ERROR, finalContext.getErrorMessage()));
+                    return;
+                }
+                sink.complete();
+                WorkflowContext.removeStreamEmitter(streamEmitterId);
+                log.info("代码生成工作流流式执行完成，appId: {}", appId);
+            } catch (BusinessException e) {
+                sink.error(e);
+            } catch (Exception e) {
+                log.error("代码生成工作流流式执行异常，appId: {}", appId, e);
+                sink.error(new BusinessException(ErrorCode.OPERATION_ERROR, "代码生成工作流执行异常：" + e.getMessage()));
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**

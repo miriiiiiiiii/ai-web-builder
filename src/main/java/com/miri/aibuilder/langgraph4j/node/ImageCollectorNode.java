@@ -25,6 +25,7 @@ public class ImageCollectorNode {
     public static AsyncNodeAction<MessagesState<String>> create() {
         return node_async(state -> {
             WorkflowContext context = WorkflowContext.getContext(state);
+            context.emitStream("开始收集图片...  \n");
             String originalPrompt = context.getOriginalPrompt();
             List<ImageResource> collectedImages = new ArrayList<>();
 
